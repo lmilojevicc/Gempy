@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from config import MODEL_NAME, SYSTEM_PROMPT
+from config import AVAILABLE_FUNCS, MODEL_NAME, SYSTEM_PROMPT
 
 
 def main():
@@ -25,7 +25,9 @@ def main():
     response = client.models.generate_content(
         model=MODEL_NAME,
         contents=messages,
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT, tools=[AVAILABLE_FUNCS]
+        ),
     )
 
     usage_metadata = response.usage_metadata
@@ -40,6 +42,10 @@ def main():
         print(f"User prompt: {user_prompt}")
         print(f"Prompt tokens: {prompt_tokens}")
         print(f"Response tokens: {response_tokens}")
+
+    if response.function_calls:
+        for fc in response.function_calls:
+            print(f"Calling function: {fc.name}({fc.args})")
 
     print(f"Response:\n{response.text}")
 
