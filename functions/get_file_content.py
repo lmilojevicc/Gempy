@@ -1,7 +1,24 @@
 import os
 
+from google.genai import types
+
 from config import MAX_CHARS
 from functions.get_files_info import is_permitted_directory
+
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="Read file contents for a relative path inside the permitted working directory. Returns up to MAX_CHARS characters; if the file is longer the output is truncated and a notice is appended.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        required=["file_path"],
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description=" Relative path to the target file (resolved against the working directory). Must be inside the permitted directory.",
+            ),
+        },
+    ),
+)
 
 
 def get_file_content(working_directory, file_path):

@@ -1,7 +1,34 @@
 import os
 import subprocess
 
+from google.genai import types
+
 from functions.get_files_info import is_permitted_directory
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Execute a Python file located inside the permitted working directory. "
+    "Returns the combined STDOUT/STDERR output or an error message if execution fails, "
+    "the file is outside the permitted directory, missing, or not a .py file.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        required=["file_path"],
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Relative path to the target Python file (resolved against the provided working_directory). "
+                "Must be located inside the permitted working directory.",
+            ),
+            "args": types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(
+                    type=types.Type.STRING,
+                ),
+                description="Optional list of command-line arguments (strings) to pass to the Python script.",
+            ),
+        },
+    ),
+)
 
 
 def run_python_file(working_directory, file_path, args=None):

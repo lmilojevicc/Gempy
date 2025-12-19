@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from config import AVAILABLE_FUNCS, MODEL_NAME, SYSTEM_PROMPT
+from ai_config import AVAILABLE_FUNCS, MODEL_NAME, SYSTEM_PROMPT
 
 
 def main():
