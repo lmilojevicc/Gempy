@@ -6,6 +6,7 @@ from google import genai
 from google.genai import types
 
 from ai_config import AVAILABLE_FUNCS, MODEL_NAME, SYSTEM_PROMPT
+from functions.call_function import call_function
 
 
 def main():
@@ -45,7 +46,11 @@ def main():
 
     if response.function_calls:
         for fc in response.function_calls:
-            print(f"Calling function: {fc.name}({fc.args})")
+            fc_result = call_function(fc, args.verbose)
+            if not fc_result:
+                raise Exception("fatal couldn't call a func")
+            elif args.verbose:
+                print(f"-> {fc_result.parts[0].function_response.response}")
 
     print(f"Response:\n{response.text}")
 
