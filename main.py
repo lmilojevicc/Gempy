@@ -23,36 +23,51 @@ def main():
     user_prompt = args.user_prompt
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=messages,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT, tools=[AVAILABLE_FUNCS]
-        ),
-    )
+    for _ in range(20):
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=messages,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT, tools=[AVAILABLE_FUNCS]
+            ),
+        )
 
-    usage_metadata = response.usage_metadata
+        if not response.function_calls and response.text:
+            print("Final response:")
+            print(response.text)
+            break
 
-    if not usage_metadata:
-        raise RuntimeError("Something went wrong!")
+        for candidate in response.candidates or []:
+            if candidate.content:
+                messages.append(candidate.content)
 
-    prompt_tokens = usage_metadata.prompt_token_count
-    response_tokens = usage_metadata.candidates_token_count
+        usage_metadata = response.usage_metadata
 
-    if args.verbose:
-        print(f"User prompt: {user_prompt}")
-        print(f"Prompt tokens: {prompt_tokens}")
-        print(f"Response tokens: {response_tokens}")
+        if not usage_metadata:
+            raise RuntimeError("Something went wrong!")
 
-    if response.function_calls:
-        for fc in response.function_calls:
-            fc_result = call_function(fc, args.verbose)
-            if not fc_result:
+        prompt_tokens = usage_metadata.prompt_token_count
+        response_tokens = usage_metadata.candidates_token_count
+
+        if args.verbose:
+            print(f"User prompt: {user_prompt}")
+            print(f"Prompt tokens: {prompt_tokens}")
+            print(f"Response tokens: {response_tokens}")
+
+        function_responses = []
+        for fc in response.function_calls or []:
+            result = call_function(fc, args.verbose)
+            if not result:
                 raise Exception("fatal couldn't call a func")
             elif args.verbose:
-                print(f"-> {fc_result.parts[0].function_response.response}")
+                print(f"-> {result.parts[0].function_response.response}")
+            function_responses.append(result.parts[0])
 
-    print(f"Response:\n{response.text}")
+        if function_responses:
+            messages.append(types.Content(role="user", parts=function_responses))
+
+    else:
+        print("Maximum iterations reached, no final response.")
 
 
 if __name__ == "__main__":
