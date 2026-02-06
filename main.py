@@ -4,59 +4,66 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from rich.console import Console
 
 from ai_config import AVAILABLE_FUNCS, MODEL_NAME, SYSTEM_PROMPT
 from functions.call_function import call_function
 
+console = Console()
 
-def run_agent(client: genai.Client, user_prompt: str, verbose: bool) -> None:
-    messages = [types.Content(role="user", parts=[types.Part(text=user_prompt)])]
 
+def run_agent(
+    client: genai.Client, messages: list[types.Content], verbose: bool
+) -> list[types.Content]:
     for _ in range(20):
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=messages,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT, tools=[AVAILABLE_FUNCS]
-            ),
-        )
+        with console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT, tools=[AVAILABLE_FUNCS]
+                ),
+            )
 
-        if not response.function_calls and response.text:
-            print("Final response:")
-            print(response.text)
-            break
+            for candidate in response.candidates or []:
+                if candidate.content:
+                    messages.append(candidate.content)
 
-        for candidate in response.candidates or []:
-            if candidate.content:
-                messages.append(candidate.content)
+            usage_metadata = response.usage_metadata
 
-        usage_metadata = response.usage_metadata
+            if not usage_metadata:
+                raise RuntimeError("Something went wrong!")
 
-        if not usage_metadata:
-            raise RuntimeError("Something went wrong!")
+            total_tokens = usage_metadata.total_token_count
+            console.print(f"[dim]Context used: {total_tokens} tokens[/dim]")
 
-        prompt_tokens = usage_metadata.prompt_token_count
-        response_tokens = usage_metadata.candidates_token_count
-
-        if verbose:
-            print(f"User prompt: {user_prompt}")
-            print(f"Prompt tokens: {prompt_tokens}")
-            print(f"Response tokens: {response_tokens}")
-
-        function_responses = []
-        for fc in response.function_calls or []:
-            result = call_function(fc, verbose)
-            if not result:
-                raise Exception("fatal couldn't call a func")
             if verbose:
-                print(f"-> {result.parts[0].function_response.response}")
-            function_responses.append(result.parts[0])
+                print(f"Prompt tokens: {usage_metadata.prompt_token_count}")
+                print(f"Response tokens: {usage_metadata.candidates_token_count}")
 
-        if function_responses:
-            messages.append(types.Content(role="user", parts=function_responses))
+            if not response.function_calls and response.text:
+                console.print(f"[bold blue]Gemini:[/bold blue] {response.text}")
+                return messages
+
+            function_responses = []
+            for fc in response.function_calls or []:
+                result = call_function(fc, verbose)
+                if not result or not result.parts:
+                    raise Exception("fatal couldn't call a func or result has no parts")
+
+                if verbose:
+                    part = result.parts[0]
+                    if part.function_response:
+                        print(f"-> {part.function_response.response}")
+
+                function_responses.append(result.parts[0])
+
+            if function_responses:
+                messages.append(types.Content(role="user", parts=function_responses))
 
     else:
         print("Maximum iterations reached, no final response.")
+        return messages
 
 
 def main():
@@ -64,15 +71,40 @@ def main():
     api_key = os.environ.get("GEMINI_API_KEY")
 
     parser = argparse.ArgumentParser(description="Chatbot")
-    parser.add_argument("user_prompt", type=str, help="User prompt")
+    parser.add_argument("user_prompt", type=str, nargs="?", help="User prompt")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
 
     client = genai.Client(api_key=api_key)
-    user_prompt = args.user_prompt
     verbose = args.verbose
+    messages = []
 
-    run_agent(client, user_prompt, verbose)
+    if args.user_prompt:
+        messages.append(
+            types.Content(role="user", parts=[types.Part(text=args.user_prompt)])
+        )
+        messages = run_agent(client, messages, verbose)
+
+    if not args.user_prompt:
+        console.print(
+            "[bold yellow]Starting interactive session. Type 'exit' or 'quit' to end.[/bold yellow]"
+        )
+
+    while True:
+        try:
+            user_input = console.input("[bold green]User:[/bold green] ")
+            if user_input.lower() in ["exit", "quit"]:
+                break
+            if not user_input.strip():
+                continue
+
+            messages.append(
+                types.Content(role="user", parts=[types.Part(text=user_input)])
+            )
+            messages = run_agent(client, messages, verbose)
+        except KeyboardInterrupt, EOFError:
+            print("\nExiting...")
+            break
 
 
 if __name__ == "__main__":

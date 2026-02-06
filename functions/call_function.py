@@ -4,34 +4,38 @@ from ai_config import FUNCS_TO_CALL
 
 
 def call_function(function_call: types.FunctionCall, verbose=False) -> types.Content:
+    fc_name = function_call.name or "unknown_function"
+    fc_args = function_call.args or {}
+
     if verbose:
-        print(f"Calling function: {function_call.name}({function_call.args})")
+        print(f"Calling function: {fc_name}({fc_args})")
     else:
-        print(f" - Calling function: {function_call.name}")
+        print(f" - Calling function: {fc_name}")
 
-    function_call.args["working_directory"] = "calculator"
+    fc_args["working_directory"] = "calculator"
 
-    args = function_call.args
-    func = FUNCS_TO_CALL.get(function_call.name)
+    func = FUNCS_TO_CALL.get(fc_name)
     if func is None:
         return types.Content(
             role="tool",
             parts=[
                 types.Part.from_function_response(
-                    name=function_call.name,
-                    response={"error": f"Unknown function: {function_call.name}"},
+                    name=fc_name,
+                    response={"error": f"Unknown function: {fc_name}"},
                 )
             ],
         )
 
-    args = function_call.args
-    result = func(**args)
+    try:
+        result = func(**fc_args)
+    except Exception as e:
+        result = f"Error executing function: {e}"
 
     return types.Content(
         role="tool",
         parts=[
             types.Part.from_function_response(
-                name=function_call.name,
+                name=fc_name,
                 response={"result": result},
             )
         ],
