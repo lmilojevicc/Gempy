@@ -3,7 +3,9 @@ from google.genai import types
 from ai_config import FUNCS_TO_CALL
 
 
-def call_function(function_call: types.FunctionCall, verbose=False) -> types.Content:
+def call_function(
+    function_call: types.FunctionCall, working_directory: str, verbose: bool = False
+) -> types.Content:
     fc_name = function_call.name or "unknown_function"
     fc_args = function_call.args or {}
 
@@ -12,7 +14,7 @@ def call_function(function_call: types.FunctionCall, verbose=False) -> types.Con
     else:
         print(f" - Calling function: {fc_name}")
 
-    fc_args["working_directory"] = "calculator"
+    fc_args["working_directory"] = working_directory
 
     func = FUNCS_TO_CALL.get(fc_name)
     if func is None:

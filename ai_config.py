@@ -32,4 +32,3 @@ FUNCS_TO_CALL = {
     "write_file": write_file,
     "run_python_file": run_python_file,
 }
-WORKING_DIR = "calculator"

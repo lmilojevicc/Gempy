@@ -13,7 +13,10 @@ console = Console()
 
 
 def run_agent(
-    client: genai.Client, messages: list[types.Content], verbose: bool
+    client: genai.Client,
+    messages: list[types.Content],
+    working_directory: str,
+    verbose: bool,
 ) -> list[types.Content]:
     for _ in range(20):
         with console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
@@ -47,7 +50,7 @@ def run_agent(
 
             function_responses = []
             for fc in response.function_calls or []:
-                result = call_function(fc, verbose)
+                result = call_function(fc, working_directory, verbose)
                 if not result or not result.parts:
                     raise Exception("fatal couldn't call a func or result has no parts")
 
@@ -73,17 +76,28 @@ def main():
     parser = argparse.ArgumentParser(description="Chatbot")
     parser.add_argument("user_prompt", type=str, nargs="?", help="User prompt")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument(
+        "--workdir",
+        type=str,
+        default=".",
+        help="Working directory for the agent (default: current directory)",
+    )
     args = parser.parse_args()
 
     client = genai.Client(api_key=api_key)
     verbose = args.verbose
+    working_directory = args.workdir
     messages = []
+
+    if not os.path.isdir(working_directory):
+        print(f"Error: Working directory '{working_directory}' does not exist.")
+        return
 
     if args.user_prompt:
         messages.append(
             types.Content(role="user", parts=[types.Part(text=args.user_prompt)])
         )
-        messages = run_agent(client, messages, verbose)
+        messages = run_agent(client, messages, working_directory, verbose)
 
     if not args.user_prompt:
         console.print(
@@ -92,6 +106,7 @@ def main():
 
     while True:
         try:
+            # If we just finished a prompt from CLI, we still drop into loop
             user_input = console.input("[bold green]User:[/bold green] ")
             if user_input.lower() in ["exit", "quit"]:
                 break
@@ -101,7 +116,7 @@ def main():
             messages.append(
                 types.Content(role="user", parts=[types.Part(text=user_input)])
             )
-            messages = run_agent(client, messages, verbose)
+            messages = run_agent(client, messages, working_directory, verbose)
         except KeyboardInterrupt, EOFError:
             print("\nExiting...")
             break
